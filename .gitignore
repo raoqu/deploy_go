@@ -1,0 +1,6 @@
+__debug_bin
+Upload/
+input/
+server
+*.exe
+main

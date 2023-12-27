@@ -1,0 +1,6 @@
+{
+    "imageTool": {
+        "command" : "C:\\Users\\Qu\\anaconda3\\python -m backgroundremover.cmd.cli -i ${input} -o ${output}",
+        "directory" : "D:\\mylab\\backgroundremover"
+    }
+}
