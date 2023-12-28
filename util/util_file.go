@@ -2,12 +2,19 @@ package util
 
 import (
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 )
+
+type FileInfo struct {
+	FileName string `json:"file_name"`
+	IsFolder bool   `json:"is_folder"`
+	FileSize int64  `json:"file_size"`
+}
 
 func GetUniqueFileName(name string) (string, error) {
 	if _, err := os.Stat(name); os.IsNotExist(err) {
@@ -42,24 +49,59 @@ func PathMatchExts(path string, exts []string) bool {
 	return false
 }
 
+func ReadFolder(folderPath string, exts []string) ([]FileInfo, error) {
+	var fileList = []FileInfo{}
+	files, err := os.ReadDir(folderPath)
+	for _, f := range files {
+		var info fs.FileInfo
+		var fileSize int64 = 0
+		info, err = f.Info()
+		if err == nil {
+			fileSize = info.Size()
+		}
+
+		fileList = append(fileList, FileInfo{
+			FileName: f.Name(),
+			IsFolder: f.IsDir(),
+			FileSize: fileSize,
+		})
+	}
+
+	return fileList, err
+}
+
 // enumerate files
 //
 //	exts: with "." prefix, e.g. {".xls", ".xlsx"}
-func EnumerateFiles(folderPath string, exts []string) ([]string, error) {
-	var xlsxFiles = []string{}
+func EnumerateFiles(folderPath string, exts []string, includeFolder bool) ([]FileInfo, error) {
+	if !includeFolder {
+		return ReadFolder(folderPath, exts)
+	}
+
+	var files = []FileInfo{}
 
 	var err = filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
 		// Check if required files
 		base := filepath.Base(path)
-		if info == nil || info.IsDir() || strings.HasPrefix(base, ".") || base == "__merged.xlsx" {
+		if info == nil || strings.HasPrefix(base, ".") || base == "__merged.xlsx" {
 			return nil
+		} else if includeFolder && info.IsDir() {
+			files = append(files, FileInfo{
+				FileName: info.Name(),
+				IsFolder: true,
+				FileSize: 0,
+			})
 		} else if PathMatchExts(path, exts) {
-			xlsxFiles = append(xlsxFiles, path)
+			files = append(files, FileInfo{
+				FileName: info.Name(),
+				IsFolder: false,
+				FileSize: info.Size(),
+			})
 			return nil
 		}
 		return nil
 	})
-	return xlsxFiles, err
+	return files, err
 }
 
 func RemoveFiles(filePaths []string) {
@@ -76,7 +118,7 @@ func FileExists(path string) bool {
 	return !fileInfo.IsDir() && fileInfo.Mode().IsRegular()
 }
 
-func copyFile(destPath string, srcPath string) {
+func CopyFile(destPath string, srcPath string) {
 	os.Remove(destPath)
 
 	src, _ := os.Open(srcPath)
@@ -104,4 +146,25 @@ func GetPath(relativePath string) (string, error) {
 
 	exeDir := filepath.Dir(exePath)
 	return filepath.Join(exeDir, relativePath), nil
+}
+
+func ValidatePathSecurity(path string, availableFolders []string) bool {
+	if strings.Contains(path, "..") || strings.Contains(path, "\\") {
+		return false
+	}
+
+	segments := strings.Split(path, "/")
+
+	for _, segment := range segments {
+		if segment == ".." {
+			return false
+		}
+	}
+
+	for _, folder := range availableFolders {
+		if segments[0] == folder {
+			return true
+		}
+	}
+	return false
 }

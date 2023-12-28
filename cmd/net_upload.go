@@ -9,7 +9,11 @@ import (
 	"path/filepath"
 	"raoqu/util"
 	"strconv"
+	"strings"
 )
+
+var SAFE_OPERATION_FOLDER = []string{"Upload"}
+var DEFAULT_FOLDER = "Upload"
 
 type UploadResult struct {
 	Name     string `json:"name"`
@@ -35,12 +39,15 @@ type UploadResult struct {
 //	}
 type FileItem struct {
 	Id           string `json:"id"`
-	Key          int    `json:"key"`
 	FileName     string `json:"fileName"`
-	FilePath     string `json:"filePath"`
 	FileSize     int64  `json:"fileSize"`
 	TimeOfUpload string `json:"timeOfUpload"`
-	Uploader     string `json:"uploader"`
+	IsFolder     bool   `json:"isFolder"`
+}
+
+type FileListRequest struct {
+	Path          string `json:"path"`
+	IncludeFolder bool   `json:"includeFolder"`
 }
 
 type DeleteFileRequest struct {
@@ -55,7 +62,7 @@ type UploadFileTargetPathCallback func(filename string) string
 func uploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	targetPathCallback := func(filename string) string {
-		targetPath, _ := util.GetPath("./Upload/" + filename)
+		targetPath, _ := util.GetPath("./" + DEFAULT_FOLDER + "/" + filename)
 		targetPath, _ = util.GetUniqueFileName(targetPath)
 		return targetPath
 	}
@@ -101,18 +108,28 @@ func doFileUploadProcess(w http.ResponseWriter, r *http.Request, callback Upload
 }
 
 func listFileHandler(w http.ResponseWriter, r *http.Request) {
+	var request FileListRequest
+	err := json.NewDecoder(r.Body).Decode(&request)
+	// default options
+	if err != nil {
+		request = FileListRequest{
+			Path:          "Upload",
+			IncludeFolder: false,
+		}
+	} else if len(util.TrimString(request.Path)) < 1 {
+		request.Path = DEFAULT_FOLDER
+	}
+
 	fileList := []FileItem{}
 
-	files, _ := util.EnumerateFiles("Upload/", []string{".*"})
+	files, _ := util.ReadFolder(request.Path, []string{".*"})
 	for i, file := range files {
 		fileItem := FileItem{
 			Id:           strconv.Itoa(i + 1),
-			Key:          i + 1,
-			FileName:     filepath.Base(file),
-			FilePath:     file,
+			FileName:     filepath.Base(file.FileName),
 			FileSize:     0,
-			TimeOfUpload: util.GetFileModifyTime(file),
-			Uploader:     "",
+			TimeOfUpload: util.GetFileModifyTime(file.FileName),
+			IsFolder:     file.IsFolder,
 		}
 		fileList = append(fileList, fileItem)
 	}
@@ -125,6 +142,11 @@ func deleteFileHandler(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
 		httpResponseError(w, err)
+		return
+	}
+
+	if !util.ValidatePathSecurity(request.FilePath, SAFE_OPERATION_FOLDER) || !strings.Contains(request.FilePath, "/") || !strings.Contains(request.FilePath, "\\") {
+		httpResponseFail(w, "Dagerouse operaton denied")
 		return
 	}
 
