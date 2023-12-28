@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"raoqu/util"
 	"time"
@@ -13,13 +12,42 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
-type LoginResponse struct {
-	Success  bool   `json:"success"`
+type LoginUser struct {
+	Id       int    `json:"token"`
 	Username string `json:"username"`
+	Email    string `json:"email"`
+	Phone    string `json:"phone"`
+}
+
+type LoginPermissions struct {
+	Id        string   `json:"id"`
+	Operation []string `json:"operation"`
+}
+
+type LoginData struct {
+	Token       string             `json:"token"`
+	User        LoginUser          `json:"user"`
+	Permissions []LoginPermissions `json:"permissions"`
+}
+
+type LoginResponse struct {
+	Code    int       `json:"code"`
+	Data    LoginData `json:"data"`
+	Message string    `json:"message"`
 }
 
 type SessionData struct {
 	Username string
+}
+
+func responseLoginContent(w http.ResponseWriter, text string) {
+	var response = LoginResponse{}
+	err := json.Unmarshal([]byte(text), &response)
+	if err != nil {
+		httpResponseError(w, err)
+	} else {
+		httpResponseJson(w, response)
+	}
 }
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -30,8 +58,8 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if request.Username != "admin" || request.Password != "admin" {
-		httpResponseError(w, errors.New("Invalid username or password"))
+	if request.Username != "admin" || request.Password != "github.com/raoqu" {
+		responseLoginContent(w, login_fail_response)
 		return
 	}
 
@@ -48,9 +76,56 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		Value:   sessionId,
 		Expires: time.Now().Add(DEFAULT_SESSION_EXPIRATION),
 	})
-	w.WriteHeader(http.StatusOK)
-	httpResponseObject(w, LoginResponse{
-		Success:  true,
-		Username: request.Username,
-	})
+	responseLoginContent(w, login_response)
 }
+
+const login_fail_response = `{
+	"code": 401,
+	"data": {
+	},
+	"message": "Invalid username or password"
+}`
+
+const login_response = `{
+	"code": 200,
+	"data": {
+	  "token": "mock_token_123456",
+	  "user": {
+		"id": 1,
+		"username": "管理员",
+		"email": "admin@raeiou.com",
+		"phone": "18888888888"
+	  },
+	  "permissions": [
+		{
+		  "id": "dashboard",
+		  "operation": [
+		  ]
+		},
+		{
+		  "id": "terminal",
+		  "operation": [
+			
+		  ]
+		},
+		{
+		  "id": "demo",
+		  "operation": [
+			"upload",
+			"download"
+		  ]
+		},
+		{
+		  "id": "authority/role",
+		  "operation": [
+			"index",
+			"create",
+			"update",
+			"view",
+			"delete"
+		  ]
+		}
+	  ]
+	},
+	"message": "login success"
+}`

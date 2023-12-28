@@ -95,3 +95,13 @@ func GetFileSize(f *os.File) int64 {
 	}
 	return fi.Size()
 }
+
+func GetPath(relativePath string) (string, error) {
+	exePath, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+
+	exeDir := filepath.Dir(exePath)
+	return filepath.Join(exeDir, relativePath), nil
+}

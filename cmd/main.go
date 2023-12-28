@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"io/fs"
 	"net/http"
 	"os"
 	"raoqu/util"
@@ -13,19 +12,20 @@ var globalConfig = loadConfig()
 var SESSION_MANAGER = NewSessionManager(60 * time.Minute)
 
 func initEnvironment() {
-	if _, err := os.Stat("./input"); os.IsNotExist(err) {
-		os.Mkdir("./input", fs.ModeDir)
+	path, _ := util.GetPath("./Upload")
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		os.Mkdir(path, 0755)
 	}
 }
 
-type HttpHandler func(http.ResponseWriter, *http.Request)
-
 func validateLoginStatus(w http.ResponseWriter, r *http.Request) bool {
+	return true
 	if r.URL.Path == "/api/login" {
 		return true
 	}
 
-	sessionId := r.Header.Get(DEFAULT_SESSION_NAME)
+	sessionId := r.Header.Get("Cookie")
+	sessionId = util.GetPairedValue(sessionId, DEFAULT_SESSION_NAME)
 	_, ok := SESSION_MANAGER.Get(sessionId)
 	return ok
 }
@@ -55,6 +55,8 @@ func main() {
 	for _, path := range handlerMap.Keys() {
 		handler, _ := handlerMap.Get(path)
 		http.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+			util.Green(r.URL.Path)
+
 			// validate login status
 			if !validateLoginStatus(w, r) {
 				httpResponseError(w, errors.New("not login yet"))
@@ -62,7 +64,7 @@ func main() {
 			}
 
 			// forward to http handler
-			httpHandler := handler.(HttpHandler)
+			httpHandler := handler.(func(http.ResponseWriter, *http.Request))
 			httpHandler(w, r)
 		})
 	}

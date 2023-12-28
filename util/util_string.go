@@ -85,3 +85,14 @@ func ReplaceTemplate(template string, values map[string]string) string {
 	}
 	return template
 }
+
+func GetPairedValue(s, key string) string {
+	pairs := strings.Split(s, ";")
+	for _, pair := range pairs {
+		kv := strings.Split(pair, "=")
+		if len(kv) == 2 && kv[0] == key {
+			return kv[1]
+		}
+	}
+	return ""
+}

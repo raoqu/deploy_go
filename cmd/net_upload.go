@@ -55,7 +55,7 @@ type UploadFileTargetPathCallback func(filename string) string
 func uploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	targetPathCallback := func(filename string) string {
-		targetPath := "./Upload/" + filename
+		targetPath, _ := util.GetPath("./Upload/" + filename)
 		targetPath, _ = util.GetUniqueFileName(targetPath)
 		return targetPath
 	}
