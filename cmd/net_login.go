@@ -93,37 +93,13 @@ const login_response = `{
 	  "user": {
 		"id": 1,
 		"username": "管理员",
-		"email": "admin@raeiou.com",
+		"email": "raoqu@msn.com",
 		"phone": "18888888888"
 	  },
 	  "permissions": [
 		{
-		  "id": "dashboard",
-		  "operation": [
-		  ]
-		},
-		{
-		  "id": "terminal",
-		  "operation": [
-			
-		  ]
-		},
-		{
-		  "id": "demo",
-		  "operation": [
-			"upload",
-			"download"
-		  ]
-		},
-		{
-		  "id": "authority/role",
-		  "operation": [
-			"index",
-			"create",
-			"update",
-			"view",
-			"delete"
-		  ]
+		  "id": "files",
+		  "operation": []
 		}
 	  ]
 	},

@@ -153,6 +153,12 @@ func GetAbsPath(relativePath string) (string, error) {
 	return filepath.Join(exeDir, relativePath), nil
 }
 
+func JoinPath(path string, path2 string) string {
+	newPath := filepath.Join(path, path2)
+	newPath = strings.ReplaceAll(newPath, "\\", "/")
+	return newPath
+}
+
 func ValidatePathSecurity(path string, availableFolders []string) bool {
 	if strings.Contains(path, "..") || strings.Contains(path, "\\") || filepath.IsAbs(path) {
 		return false

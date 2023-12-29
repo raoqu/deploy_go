@@ -32,18 +32,13 @@ func validateLoginStatus(w http.ResponseWriter, r *http.Request) bool {
 	return ok
 }
 
-func main() {
-
-	initEnvironment()
-
-	// Default static web server
-	fileServer := http.FileServer(http.Dir("./static"))
-	http.Handle("/static/", http.StripPrefix("/static/", fileServer))
-
-	// Initialize http handler
+func initApiHandlers() *util.OrderedMap {
 	handlerMap := util.NewOrderedMap()
-	handlerMap.Set("/api/getConfig/", handleGetConfig)
 	handlerMap.Set("/api/login", handleLogin)
+	handlerMap.Set("/api/menu/list", handleMenuList)
+	handlerMap.Set("/api/authority/user/refresh-permissions", handleMenuList)
+
+	handlerMap.Set("/api/getConfig/", handleGetConfig)
 	handlerMap.Set("/api/upload", uploadHandler)
 	handlerMap.Set("/api/files", listFileHandler)
 	handlerMap.Set("/api/delete", deleteFileHandler)
@@ -53,11 +48,22 @@ func main() {
 	handlerMap.Set("/api/run", handleRunCommand)
 	handlerMap.Set("/api/stop/", handleStopCommand)
 	handlerMap.Set("/api/output/", handleGetOutput)
+	return handlerMap
+}
+
+func main() {
+
+	initEnvironment()
+
+	handlerMap := initApiHandlers()
+
+	fileServer := http.FileServer(http.Dir("static"))
+	mux := http.NewServeMux()
 
 	// Intercept requests for login status validation
 	for _, path := range handlerMap.Keys() {
 		handler, _ := handlerMap.Get(path)
-		http.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 			util.Green(r.URL.Path)
 
 			// validate login status
@@ -71,5 +77,9 @@ func main() {
 			httpHandler(w, r)
 		})
 	}
-	http.ListenAndServe("127.0.0.1:8066", nil)
+
+	// Default forward to static file server
+	mux.Handle("/", fileServer)
+
+	http.ListenAndServe("127.0.0.1:8066", mux)
 }

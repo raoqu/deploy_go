@@ -78,7 +78,7 @@ func fileCreateFolderHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newPath := filepath.Join(request.Path, request.Name)
+	newPath := util.JoinPath(request.Path, request.Name)
 	if !util.ValidatePathSecurity(newPath, SAFE_OPERATION_FOLDER) {
 		httpResponseFail(w, "Invalid path")
 		return
@@ -142,7 +142,7 @@ func doFileUploadProcess(w http.ResponseWriter, r *http.Request, callback Upload
 		return
 	}
 
-	targetFilename := path.Base(targetPath)
+	targetFilename := path.Base(strings.ReplaceAll(targetPath, "\\", "/"))
 
 	fileUploaded := UploadResult{
 		Name:     srcFilename,
