@@ -12,7 +12,9 @@ var globalConfig = loadConfig()
 var SESSION_MANAGER = NewSessionManager(60 * time.Minute)
 
 func initEnvironment() {
-	path, _ := util.GetPath("./Upload")
+	// mkdir for upload
+	uploadPath := "./" + DEFAULT_UPLOAD_FOLDER
+	path, _ := util.GetAbsPath(uploadPath)
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		os.Mkdir(path, 0755)
 	}
@@ -45,6 +47,7 @@ func main() {
 	handlerMap.Set("/api/upload", uploadHandler)
 	handlerMap.Set("/api/files", listFileHandler)
 	handlerMap.Set("/api/delete", deleteFileHandler)
+	handlerMap.Set("/api/createFolder", fileCreateFolderHandler)
 	handlerMap.Set("/api/download", downloadFileHandler)
 
 	handlerMap.Set("/api/run", handleRunCommand)
@@ -68,5 +71,5 @@ func main() {
 			httpHandler(w, r)
 		})
 	}
-	http.ListenAndServe("127.0.0.1:8062", nil)
+	http.ListenAndServe("127.0.0.1:8066", nil)
 }

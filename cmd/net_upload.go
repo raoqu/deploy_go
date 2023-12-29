@@ -8,12 +8,13 @@ import (
 	"path"
 	"path/filepath"
 	"raoqu/util"
+	"regexp"
 	"strconv"
 	"strings"
 )
 
-var SAFE_OPERATION_FOLDER = []string{"Upload"}
-var DEFAULT_FOLDER = "Upload"
+var DEFAULT_UPLOAD_FOLDER = "Upload"
+var SAFE_OPERATION_FOLDER = []string{DEFAULT_UPLOAD_FOLDER}
 
 type UploadResult struct {
 	Name     string `json:"name"`
@@ -50,19 +51,56 @@ type FileListRequest struct {
 	IncludeFolder bool   `json:"includeFolder"`
 }
 
+type FolderCreateRequest struct {
+	Path string `json:"path"`
+	Name string `json:"name"`
+}
+
 type DeleteFileRequest struct {
 	FilePath string `json:"filePath"`
 	Id       string `json:"id"`
 }
 
 /* filename -> target path */
-type UploadFileTargetPathCallback func(filename string) string
+type UploadFileTargetPathCallback func(path string, filename string) string
+
+func fileCreateFolderHandler(w http.ResponseWriter, r *http.Request) {
+	var request FolderCreateRequest
+	err := json.NewDecoder(r.Body).Decode(&request)
+	if err != nil {
+		httpResponseFail(w, "Invalid request")
+		return
+	}
+	folderName := request.Name
+	match, _ := regexp.MatchString(`^[^\\/:\*\?"<>\|]+$`, folderName)
+	if !match {
+		httpResponseFail(w, "Invalid request")
+		return
+	}
+
+	newPath := filepath.Join(request.Path, request.Name)
+	if !util.ValidatePathSecurity(newPath, SAFE_OPERATION_FOLDER) {
+		httpResponseFail(w, "Invalid path")
+		return
+	}
+	newPath, err = util.GetAbsPath(newPath)
+	if err != nil || os.Mkdir(newPath, 0755) != nil {
+		httpResponseFail(w, "Operation failed")
+		return
+	}
+
+	var response = FolderCreateRequest{
+		Path: request.Path,
+		Name: folderName,
+	}
+	httpResponseJson(w, response)
+}
 
 // Upload file
 func uploadHandler(w http.ResponseWriter, r *http.Request) {
 
-	targetPathCallback := func(filename string) string {
-		targetPath, _ := util.GetPath("./" + DEFAULT_FOLDER + "/" + filename)
+	targetPathCallback := func(path string, filename string) string {
+		targetPath, _ := util.GetAbsPath(filepath.Join(path, filename))
 		targetPath, _ = util.GetUniqueFileName(targetPath)
 		return targetPath
 	}
@@ -70,28 +108,38 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	doFileUploadProcess(w, r, targetPathCallback)
 }
 
-func doFileUploadProcess(w http.ResponseWriter, r *http.Request, callback UploadFileTargetPathCallback) string {
+func doFileUploadProcess(w http.ResponseWriter, r *http.Request, callback UploadFileTargetPathCallback) {
 	file, header, err := r.FormFile("file")
+	folderPath := r.FormValue("path")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
-		return ""
+		return
 	}
 	defer file.Close()
 
+	if len(util.TrimString(folderPath)) < 1 {
+		folderPath = DEFAULT_UPLOAD_FOLDER
+	}
+
+	if !util.ValidatePathSecurity(folderPath, SAFE_OPERATION_FOLDER) {
+		httpResponseFail(w, "Invalid file path")
+		return
+	}
+
 	srcFilename := header.Filename
-	targetPath := callback(srcFilename)
+	targetPath := callback(folderPath, srcFilename)
 
 	out, err := os.Create(targetPath)
 	if err != nil {
 		httpResponseError(w, err)
-		return ""
+		return
 	}
 	defer out.Close()
 
 	fileSize, err := io.Copy(out, file)
 	if err != nil {
 		httpResponseError(w, err)
-		return ""
+		return
 	}
 
 	targetFilename := path.Base(targetPath)
@@ -104,7 +152,6 @@ func doFileUploadProcess(w http.ResponseWriter, r *http.Request, callback Upload
 	}
 
 	httpResponseJson(w, fileUploaded)
-	return targetPath
 }
 
 func listFileHandler(w http.ResponseWriter, r *http.Request) {
@@ -113,14 +160,19 @@ func listFileHandler(w http.ResponseWriter, r *http.Request) {
 	// default options
 	if err != nil {
 		request = FileListRequest{
-			Path:          "Upload",
+			Path:          DEFAULT_UPLOAD_FOLDER,
 			IncludeFolder: false,
 		}
 	} else if len(util.TrimString(request.Path)) < 1 {
-		request.Path = DEFAULT_FOLDER
+		request.Path = DEFAULT_UPLOAD_FOLDER
 	}
 
 	fileList := []FileItem{}
+
+	if !util.ValidatePathSecurity(request.Path, SAFE_OPERATION_FOLDER) {
+		httpResponseObject(w, fileList)
+		return
+	}
 
 	files, _ := util.ReadFolder(request.Path, []string{".*"})
 	for i, file := range files {
@@ -145,17 +197,24 @@ func deleteFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !util.ValidatePathSecurity(request.FilePath, SAFE_OPERATION_FOLDER) || !strings.Contains(request.FilePath, "/") || !strings.Contains(request.FilePath, "\\") {
-		httpResponseFail(w, "Dagerouse operaton denied")
+	if !util.ValidatePathSecurity(request.FilePath, SAFE_OPERATION_FOLDER) || !strings.Contains(request.FilePath, "/") {
+		httpResponseFail(w, "Invalid file path")
 		return
 	}
 
-	os.Remove(request.FilePath)
+	if err := util.DeleteFileOrDir(request.FilePath); err != nil {
+		httpResponseFail(w, "Failed remove file")
+		return
+	}
 
 	httpResponseObject(w, "")
 }
 
 func downloadFileHandler(w http.ResponseWriter, r *http.Request) {
 	filePath := r.URL.Query().Get("file")
+	if !util.ValidatePathSecurity(filePath, SAFE_OPERATION_FOLDER) {
+		httpResponseFail(w, "Invalid file path")
+		return
+	}
 	httpResponseFile(w, filePath)
 }

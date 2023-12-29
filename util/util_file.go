@@ -49,6 +49,11 @@ func PathMatchExts(path string, exts []string) bool {
 	return false
 }
 
+func DeleteFileOrDir(path string) error {
+	err := os.RemoveAll(path)
+	return err
+}
+
 func ReadFolder(folderPath string, exts []string) ([]FileInfo, error) {
 	var fileList = []FileInfo{}
 	files, err := os.ReadDir(folderPath)
@@ -138,7 +143,7 @@ func GetFileSize(f *os.File) int64 {
 	return fi.Size()
 }
 
-func GetPath(relativePath string) (string, error) {
+func GetAbsPath(relativePath string) (string, error) {
 	exePath, err := os.Executable()
 	if err != nil {
 		return "", err
@@ -149,7 +154,7 @@ func GetPath(relativePath string) (string, error) {
 }
 
 func ValidatePathSecurity(path string, availableFolders []string) bool {
-	if strings.Contains(path, "..") || strings.Contains(path, "\\") {
+	if strings.Contains(path, "..") || strings.Contains(path, "\\") || filepath.IsAbs(path) {
 		return false
 	}
 
