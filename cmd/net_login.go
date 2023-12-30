@@ -79,6 +79,10 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	responseLoginContent(w, login_response)
 }
 
+func handlePermissions(w http.ResponseWriter, r *http.Request) {
+	responseLoginContent(w, login_response)
+}
+
 const login_fail_response = `{
 	"code": 401,
 	"data": {

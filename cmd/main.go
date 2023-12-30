@@ -36,7 +36,7 @@ func initApiHandlers() *util.OrderedMap {
 	handlerMap := util.NewOrderedMap()
 	handlerMap.Set("/api/login", handleLogin)
 	handlerMap.Set("/api/menu/list", handleMenuList)
-	handlerMap.Set("/api/authority/user/refresh-permissions", handleMenuList)
+	handlerMap.Set("/api/authority/user/refresh-permissions", handlePermissions)
 
 	handlerMap.Set("/api/getConfig/", handleGetConfig)
 	handlerMap.Set("/api/upload", uploadHandler)
