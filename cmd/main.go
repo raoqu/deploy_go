@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"os"
 	"raoqu/util"
@@ -67,10 +68,10 @@ func main() {
 		handler, _ := handlerMap.Get(path)
 		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 			// validate login status
-			// if !validateLoginStatus(w, r) {
-			// 	httpResponseError(w, errors.New("not login yet"))
-			// 	return
-			// }
+			if !validateLoginStatus(w, r) {
+				httpResponseError(w, errors.New("not login yet"))
+				return
+			}
 
 			// forward to http handler
 			httpHandler := handler.(func(http.ResponseWriter, *http.Request))
