@@ -1,106 +1,148 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"log"
-	"os"
 	"os/exec"
+	"path/filepath"
+	"raoqu/util"
+	"raoqu/util/filemon"
 	"runtime"
+	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
-	"github.com/fsnotify/fsnotify"
 )
 
-type Action struct {
-	Command          string `json:"command"`
-	StrongDependency bool   `json:"strongDependency"`
+type DeployContext struct {
+	BasePath string
+	File     string
+	Pattern  string
+	Action   string
+	Env      map[string]string
+	Dir      string
+	Command  string
 }
 
-type ActionConfig struct {
-	Pattern string   `json:"pattern"`
-	Actions []Action `json:"actions"`
+func startDeployService(configFilename string) {
+	loadDeployConfig(configFilename)
+
+	w := filemon.NewWatcher(deployFn)
+	w.Watch(DEPLOY_CONFIG.Path)
 }
 
-func executeCommands(actions []Action) {
-	for _, action := range actions {
-		var cmd *exec.Cmd
-		if runtime.GOOS == "windows" {
-			cmd = exec.Command("cmd.exe", "/C", action.Command)
-		} else {
-			cmd = exec.Command("sh", "-c", action.Command)
+func deployFn(ev *filemon.WatchEvent) {
+	if ev.Type == filemon.C_Create {
+		path := ev.Fpath
+		file, err := filepath.Rel(DEPLOY_CONFIG.Path, path)
+		if err != nil {
+			util.PrintError(err)
+			return
 		}
+
+		for _, item := range DEPLOY_CONFIG.Items {
+			if matchPath(file, item.Pattern) {
+				if !executeDeployActions(file, item, DEPLOY_CONFIG.Env) {
+					break
+				}
+			}
+		}
+	}
+}
+
+func matchPath(path string, pattern string) bool {
+	match, _ := doublestar.PathMatch(pattern, path)
+	return match
+}
+
+func executeDeployActions(file string, item DeployItem, env DeployEnv) bool {
+	for _, action := range item.Actions {
+		var cmd *exec.Cmd
+		ctx := initDeployContext(file, item, action)
+		if ctx == nil {
+			return false
+		}
+
+		// cmd = exec.Command(ctx.Command)
+		if runtime.GOOS == "windows" {
+			cmd = exec.Command("c:\\windows\\system32\\cmd.exe", "/C", ctx.Command)
+		} else {
+			cmd = exec.Command("/bin/sh", "-c", ctx.Command)
+		}
+
+		cmd.Dir = ctx.Dir
+
 		output, err := cmd.CombinedOutput()
-		fmt.Printf("Executing command: %s\n", action.Command)
+		fmt.Printf("Executing command: %s   { %s }\n", ctx.Command, ctx.Dir)
 		if err != nil {
 			fmt.Printf("Error executing command: %s, Output: %s\n", err, string(output))
-			if action.StrongDependency {
-				break
-			}
-		} else {
-			fmt.Printf("Command output: %s\n", string(output))
+			return false
 		}
+		// else {
+		// 	if runtime.GOOS == "windows" {
+		// 		str, _ := util.Gbk2Utf8(string(output))
+		// 		fmt.Printf("Output: %s\n", str)
+		// 	} else {
+		// 		fmt.Printf("Output: %s\n", output)
+		// 	}
+		// }
 	}
+	return true
 }
 
-func startDeployService() {
-	configData, err := os.ReadFile("config.json")
-	if err != nil {
-		log.Fatalf("Error reading config file: %s", err)
+func initDeployContext(file string, item DeployItem, action string) *DeployContext {
+	basePath := DEPLOY_CONFIG.Path
+	ctx := DeployContext{
+		BasePath: basePath,
+		File:     file,
+		Pattern:  item.Pattern,
+		Action:   action,
 	}
 
-	var configs []ActionConfig
-	err = json.Unmarshal(configData, &configs)
-	if err != nil {
-		log.Fatalf("Error parsing config file: %s", err)
+	if parseDeployAction(&ctx) {
+		return &ctx
+	}
+	return nil
+}
+
+func parseDeployAction(ctx *DeployContext) bool {
+	action := ctx.Action
+	parts := strings.Split(action, "=>")
+	ctx.Dir = ctx.BasePath
+	if len(parts) < 1 || len(parts) > 2 {
+		util.Red("Invalid action:" + action)
+		return false
 	}
 
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		log.Fatal(err)
+	dir := ctx.BasePath
+	if len(parts) == 2 {
+		dir = decodeDeployParams(parts[0], ctx)
 	}
-	defer watcher.Close()
+	ctx.Command = decodeDeployParams(parts[len(parts)-1], ctx)
+	ctx.Dir, _ = util.GetAbsPath(dir)
+	return true
+}
 
-	done := make(chan bool)
-	go func() {
-		for {
-			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-				fmt.Println("Event:", event)
-				for _, config := range configs {
-					match, _ := doublestar.PathMatch(config.Pattern, event.Name)
-					if match && (event.Op&fsnotify.Create == fsnotify.Create || event.Op&fsnotify.Write == fsnotify.Write) {
-						executeCommands(config.Actions)
-					}
-				}
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-				log.Println("Error:", err)
-			}
-		}
-	}()
-
-	fsys := os.DirFS("/")
-	if runtime.GOOS == "windows" {
-		fsys = os.DirFS("C:\\")
+func decodeDeployParams(input string, ctx *DeployContext) string {
+	str := util.TrimString(input)
+	str = strings.ReplaceAll(str, "{$FILE}", ctx.File)
+	for k, v := range DEPLOY_CONFIG.Env {
+		str = strings.ReplaceAll(str, "{$"+k+"}", v)
 	}
-	for _, config := range configs {
-		matches, err := doublestar.Glob(fsys, config.Pattern)
-		if err != nil {
-			log.Fatal(err)
-		}
-		for _, match := range matches {
-			err = watcher.Add(match)
-			if err != nil {
-				log.Fatal(err)
-			}
-		}
-	}
+	return str
+}
 
-	<-done
+func getActionType(evType filemon.EvType) string {
+	switch evType {
+	case filemon.C_Create:
+		return "create"
+	case filemon.C_Modify:
+		return "modify"
+	case filemon.C_Delete:
+		return "delete"
+	case filemon.C_Rename:
+		return "rename"
+	case filemon.C_Attrib:
+		return "attribute"
+	default:
+		return "unknown"
+	}
 }

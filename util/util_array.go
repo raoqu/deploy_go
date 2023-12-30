@@ -29,3 +29,12 @@ func (arr GeneralArray[T]) Sort(less func(T, T) bool) {
 		}
 	}
 }
+
+func (arr GeneralArray[T]) Contains(val T) bool {
+	for _, v := range arr {
+		if Stringlize(v) == Stringlize(val) {
+			return true
+		}
+	}
+	return false
+}

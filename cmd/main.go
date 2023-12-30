@@ -1,14 +1,12 @@
 package main
 
 import (
-	"errors"
 	"net/http"
 	"os"
 	"raoqu/util"
 	"time"
 )
 
-var globalConfig = loadConfig()
 var SESSION_MANAGER = NewSessionManager(60 * time.Minute)
 
 func initEnvironment() {
@@ -37,7 +35,7 @@ func bindApiHandlers() *util.OrderedMap {
 	handlerMap.Set("/api/menu/list", handleMenuList)
 	handlerMap.Set("/api/authority/user/refresh-permissions", handlePermissions)
 
-	handlerMap.Set("/api/getConfig/", handleGetConfig)
+	handlerMap.Set("/api/config", handleConfig)
 	handlerMap.Set("/api/upload", uploadHandler)
 	handlerMap.Set("/api/files", listFileHandler)
 	handlerMap.Set("/api/delete", deleteFileHandler)
@@ -57,7 +55,7 @@ func main() {
 	initUserConfig("users.json")
 
 	// Start deploy service
-	// go startDeployService()
+	startDeployService("deploy.json")
 
 	handlerMap := bindApiHandlers()
 
@@ -68,13 +66,11 @@ func main() {
 	for _, path := range handlerMap.Keys() {
 		handler, _ := handlerMap.Get(path)
 		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
-			util.Green(r.URL.Path)
-
 			// validate login status
-			if !validateLoginStatus(w, r) {
-				httpResponseError(w, errors.New("not login yet"))
-				return
-			}
+			// if !validateLoginStatus(w, r) {
+			// 	httpResponseError(w, errors.New("not login yet"))
+			// 	return
+			// }
 
 			// forward to http handler
 			httpHandler := handler.(func(http.ResponseWriter, *http.Request))
