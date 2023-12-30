@@ -58,7 +58,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if request.Username != "admin" || request.Password != "github.com/raoqu" {
+	if !CheckLogin(request.Username, request.Password) {
 		responseLoginContent(w, login_fail_response)
 		return
 	}

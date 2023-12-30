@@ -21,7 +21,6 @@ func initEnvironment() {
 }
 
 func validateLoginStatus(w http.ResponseWriter, r *http.Request) bool {
-	return true
 	if r.URL.Path == "/api/login" {
 		return true
 	}
@@ -32,7 +31,7 @@ func validateLoginStatus(w http.ResponseWriter, r *http.Request) bool {
 	return ok
 }
 
-func initApiHandlers() *util.OrderedMap {
+func bindApiHandlers() *util.OrderedMap {
 	handlerMap := util.NewOrderedMap()
 	handlerMap.Set("/api/login", handleLogin)
 	handlerMap.Set("/api/menu/list", handleMenuList)
@@ -55,7 +54,12 @@ func main() {
 
 	initEnvironment()
 
-	handlerMap := initApiHandlers()
+	initUserConfig("users.json")
+
+	// Start deploy service
+	// go startDeployService()
+
+	handlerMap := bindApiHandlers()
 
 	fileServer := http.FileServer(http.Dir("static"))
 	mux := http.NewServeMux()
