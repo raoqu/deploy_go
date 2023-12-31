@@ -3,6 +3,7 @@ package util
 import (
 	"io"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -63,6 +64,17 @@ func DetectEncoding(s string) (string, error) {
 		return "", err
 	}
 	return result.Charset, nil
+}
+
+func Utf8(s string) string {
+	if runtime.GOOS == "windows" {
+		str, err := Gbk2Utf8(s)
+		if err == nil {
+			return str
+		}
+	}
+
+	return s
 }
 
 func Gbk2Utf8(s string) (string, error) {

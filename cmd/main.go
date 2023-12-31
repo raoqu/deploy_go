@@ -46,6 +46,7 @@ func bindApiHandlers() *util.OrderedMap {
 	handlerMap.Set("/api/run", handleRunCommand)
 	handlerMap.Set("/api/stop/", handleStopCommand)
 	handlerMap.Set("/api/output/", handleGetOutput)
+	handlerMap.Set("/api/messages", handleDeployMessages)
 	return handlerMap
 }
 
@@ -83,4 +84,5 @@ func main() {
 	mux.Handle("/", fileServer)
 
 	http.ListenAndServe("127.0.0.1:8066", mux)
+	select {}
 }

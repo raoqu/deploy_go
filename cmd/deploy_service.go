@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os/exec"
 	"path/filepath"
 	"raoqu/util"
@@ -22,6 +23,8 @@ type DeployContext struct {
 	Command  string
 }
 
+var DeployQueue = NewMessageQueue(100, 10)
+
 func startDeployService(configFilename string) {
 	loadDeployConfig(configFilename)
 
@@ -32,6 +35,7 @@ func startDeployService(configFilename string) {
 func deployFn(ev *filemon.WatchEvent) {
 	if ev.Type == filemon.C_Create {
 		path := ev.Fpath
+		logDeploy("%s uploaded", path)
 		file, err := filepath.Rel(DEPLOY_CONFIG.Path, path)
 		if err != nil {
 			util.PrintError(err)
@@ -71,19 +75,14 @@ func executeDeployActions(file string, item DeployItem, env DeployEnv) bool {
 		cmd.Dir = ctx.Dir
 
 		output, err := cmd.CombinedOutput()
-		fmt.Printf("Executing command: %s   { %s }\n", ctx.Command, ctx.Dir)
+
+		logDeploy("Executing command: %s   { %s }", ctx.Command, ctx.Dir)
 		if err != nil {
-			fmt.Printf("Error executing command: %s, Output: %s\n", err, string(output))
+			logDeploy("Failed executing command: %s, Output: %s", err, util.Utf8(string(output)))
 			return false
 		}
-		// else {
-		// 	if runtime.GOOS == "windows" {
-		// 		str, _ := util.Gbk2Utf8(string(output))
-		// 		fmt.Printf("Output: %s\n", str)
-		// 	} else {
-		// 		fmt.Printf("Output: %s\n", output)
-		// 	}
-		// }
+
+		logDeploy(util.Utf8(string(output)))
 	}
 	return true
 }
@@ -130,19 +129,29 @@ func decodeDeployParams(input string, ctx *DeployContext) string {
 	return str
 }
 
-func getActionType(evType filemon.EvType) string {
-	switch evType {
-	case filemon.C_Create:
-		return "create"
-	case filemon.C_Modify:
-		return "modify"
-	case filemon.C_Delete:
-		return "delete"
-	case filemon.C_Rename:
-		return "rename"
-	case filemon.C_Attrib:
-		return "attribute"
-	default:
-		return "unknown"
-	}
+func logDeploy(format string, a ...any) {
+	str := fmt.Sprintf(format, a...)
+	println(str)
+	DeployQueue.Push(str)
+}
+
+// func getActionType(evType filemon.EvType) string {
+// 	switch evType {
+// 	case filemon.C_Create:
+// 		return "create"
+// 	case filemon.C_Modify:
+// 		return "modify"
+// 	case filemon.C_Delete:
+// 		return "delete"
+// 	case filemon.C_Rename:
+// 		return "rename"
+// 	case filemon.C_Attrib:
+// 		return "attribute"
+// 	default:
+// 		return "unknown"
+// 	}
+// }
+
+func handleDeployMessages(w http.ResponseWriter, r *http.Request) {
+	httpResponseSSE(w, r, DeployQueue)
 }

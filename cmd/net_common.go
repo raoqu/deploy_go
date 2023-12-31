@@ -86,3 +86,45 @@ func getFileContentType(path string) string {
 		return "application/octet-stream"
 	}
 }
+
+func httpResponseSSE(w http.ResponseWriter, r *http.Request, mq *MessageQueue) {
+	clientChan := make(chan string)
+	defer close(clientChan)
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	historyMessages := mq.GetMessages()
+	for _, oldMessage := range historyMessages {
+		fmt.Fprintf(w, oldMessage+"\n")
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+	}
+
+	sub := mq.Subscribe()
+	defer mq.Unsubscribe(sub)
+
+	ctx := r.Context()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg, ok := <-sub:
+			w.Write([]byte(msg + "\n"))
+			if flusher, ok := w.(http.Flusher); ok {
+				flusher.Flush()
+			}
+			if !ok {
+				return
+			}
+		case <-mq.IsClosed():
+			if flusher, ok := w.(http.Flusher); ok {
+				flusher.Flush()
+			}
+			return
+		}
+	}
+}
